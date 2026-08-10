@@ -1,0 +1,14 @@
+you need to install these depencies before you start
+
+# @title
+!pip install requests
+!pip install chess.com
+!pip install python-chess stockfish tqdm
+!curl -s https://api.github.com/repos/official-stockfish/Stockfish/releases/latest \
+  | grep "browser_download_url" \
+  | grep "ubuntu-x86-64\.tar" \
+  | head -n 1 \
+  | cut -d '"' -f 4 \
+  | xargs wget -O stockfish.tar
+
+!tar -xvf stockfish.tar
