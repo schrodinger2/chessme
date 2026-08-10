@@ -1,0 +1,6 @@
+stockfish/
+venv/
+__pycache__/
+
+# Standalone assets / zip files
+stockfish.zip

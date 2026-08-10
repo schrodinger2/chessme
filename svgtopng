@@ -1,0 +1,20 @@
+import cairosvg
+import os
+
+os.makedirs("chess_pieces_png", exist_ok=True)
+
+pieces = [
+    "wp", "wn", "wb", "wr", "wq", "wk",
+    "bp", "bn", "bb", "br", "bq", "bk"
+]
+
+for piece in pieces:
+
+    cairosvg.svg2png(
+        url=f"chess_pieces/{piece}.svg",
+        write_to=f"chess_pieces_png/{piece}.png",
+        output_width=200,
+        output_height=200
+    )
+
+print("Done.")
