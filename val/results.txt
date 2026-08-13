@@ -1,0 +1,11 @@
+version 1:
+Positions evaluated: 10055
+Actual move in Stockfish candidate set: 9276/10055 (92.25%)
+
+
+Top-1 accuracy: 4070/10055 (40.48%)
+Average P(actual move) when candidate exists: 0.2842
+Median P(actual move): 0.1829
+Mean Reciprocal Rank: 0.6095
+
+i played against it and ironicly tied , ironically because it could have checkmated me but kept repeating
