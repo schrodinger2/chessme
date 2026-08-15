@@ -87,8 +87,9 @@ def to_tensor(board: chess.Board,candidate_moves: list[chess.Move], eval, black:
         # engine eval
         if eval[idx] and eval[0]:
             eval_diff = eval[idx] - eval[0]
-        else:
-            eval_diff = 10000 #for mate attacks the eval is none
+        elif not eval[idx]:
+            eval[idx] = 10000
+            eval_diff = eval[idx] - eval[0] #there was a bug here , it should now only give neg eval to the other moves if a mating move exists
         #############################
 
         feature = np.concatenate([
