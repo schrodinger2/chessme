@@ -9,3 +9,48 @@ Median P(actual move): 0.1829
 Mean Reciprocal Rank: 0.6095
 
 i played against it and ironicly tied , ironically because it could have checkmated me but kept repeating
+
+validation without the eval feature:
+Top- 1:  1342/10055 (13.35%)
+Average P(actual move) when candidate exists: 0.0772
+Median P(actual move): 0.0771
+Mean Reciprocal Rank: 0.3095
+
+version 2 
+i used evaluation dropout of 20% as opposed to not using it on the first run and counter intutively the model is now only choosing stockfish's best move just about always
+Top-K accuracy:
+  Top- 1:  3811/10055 (37.90%)
+  Top- 3:  6517/10055 (64.81%)
+  Top- 5:  7668/10055 (76.26%)
+  Top-10:  8881/10055 (88.32%)
+  Top-13:  9276/10055 (92.25%)
+Average P(actual move) when candidate exists: 0.4034
+Median P(actual move): 0.0000
+Mean Reciprocal Rank: 0.5883
+
+
+droping the whole evaluation feature in validition only yields :
+Top-K accuracy:
+  Top- 1:  1042/10055 (10.36%)
+  Top- 3:  2605/10055 (25.91%)
+  Top- 5:  4026/10055 (40.04%)
+  Top-10:  7359/10055 (73.19%)
+  Top-13:  9276/10055 (92.25%)
+Average P(actual move) when candidate exists: 0.0831
+Median P(actual move): 0.0318
+Mean Reciprocal Rank: 0.2817
+we can safely assume the model has been trained to be heavly reliant on evaluation alone
+
+version 3 
+dropped out the eval completely from training 
+validation with eval 
+
+validation with no eval
+  Top- 1:  1740/10055 (17.30%)
+  Top- 3:  3373/10055 (33.55%)
+  Top- 5:  4706/10055 (46.80%)
+  Top-10:  7432/10055 (73.91%)
+  Top-13:  9276/10055 (92.25%)
+Average P(actual move) when candidate exists: 0.1166
+Median P(actual move): 0.0676
+Mean Reciprocal Rank: 0.3494

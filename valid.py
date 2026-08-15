@@ -6,7 +6,7 @@ import chess.engine
 from tensor import to_tensor
 from model import ChessPolicyNet
 
-MODEL_PATH = "chess_policy_net_weights.pth"
+MODEL_PATH = "chess_policy_net_weights3.pth"
 
 STOCKFISH_PATH = "./stockfish\stockfish\stockfish-windows-x86-64-avx2.exe"
 
@@ -84,7 +84,6 @@ def predict_position(board, engine):
         else:
 
             evaluation = score.score()
-
         candidate_evals.append(evaluation)
 
     if not candidate_moves:
@@ -218,11 +217,7 @@ def load_games(filename):
     return games
 
 
-def print_game_results(
-    results,
-    game_number,
-    filename
-):
+def print_game_results(results,game_number,filename):
 
     print()
     print("=" * 75)
