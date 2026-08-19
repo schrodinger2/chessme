@@ -2,112 +2,101 @@ import chess
 import numpy as np
 import torch
 
-def to_tensor(board: chess.Board,candidate_moves: list[chess.Move], eval, black: bool):
-    """
-    Returns
-    board_tensor : (12, 8, 8)
-    move_tensor : (NUM_CANDIDATE_MOVES, 22)
+NUM_CANDIDATES = 13
+EVAL_SCALE = 400.0
+DUMMY_MOVE = chess.Move.from_uci("0000")
 
-    Move features: [from_rank, from_file, to_rank, to_file, eval_diff, moving_piece(6 one-hot), captured_piece(7 one-hot), promotion(5 one-hot)]
-    """
-    while len(candidate_moves) < 13:
-        candidate_moves.append(candidate_moves[-1])
-        eval.append(-10000)
-    # BOARD ENCODING
+
+def normalize_eval(x):
+    if x is None:
+        return 0.0
+    return float(np.tanh(x / EVAL_SCALE))
+
+
+def to_tensor(board, candidate_moves, evals, black):
 
     board_planes = np.zeros((12, 8, 8), dtype=np.float32)
 
     piece_map = {
         'P': 0, 'N': 1, 'B': 2, 'R': 3, 'Q': 4, 'K': 5,
-        'p': 6, 'n': 7, 'b': 8, 'r': 9, 'q': 10, 'k': 11}
+        'p': 6, 'n': 7, 'b': 8, 'r': 9, 'q': 10, 'k': 11
+    }
 
     for square in chess.SQUARES:
         piece = board.piece_at(square)
-        if piece is None:
-            continue
-        row = chess.square_rank(square)
-        col = chess.square_file(square)
-        plane = (piece_map[piece.symbol()] + 6 * black) % 12
-
-        board_planes[plane, row, col] = 1.0
+        if piece:
+            row = chess.square_rank(square)
+            col = chess.square_file(square)
+            plane = (piece_map[piece.symbol()] + 6 * black) % 12
+            board_planes[plane, row, col] = 1.0
 
     board_tensor = torch.from_numpy(board_planes)
 
-    # MOVE ENCODING\
+    candidate_moves = list(candidate_moves)
+    evals = list(evals)
+
+    # Pad to 13 candidates
+    while len(candidate_moves) < NUM_CANDIDATES:
+        candidate_moves.append(DUMMY_MOVE)
+        evals.append(None)
 
     move_features = []
 
-    for idx ,move in enumerate(candidate_moves):
+    for move, raw_eval in zip(candidate_moves, evals):
 
-        from_rank = chess.square_rank(move.from_square)
-        from_file = chess.square_file(move.from_square)
+        is_padding = float(move == DUMMY_MOVE)
+        is_mate = float(raw_eval is None and not is_padding)
+        evaluation = normalize_eval(raw_eval)
 
-        to_rank = chess.square_rank(move.to_square)
-        to_file = chess.square_file(move.to_square)
+        if is_padding:
+            evaluation = 0.0
 
-        # moving piece
-
-        moving_piece = board.piece_at(move.from_square)
+        moving_piece = None if is_padding else board.piece_at(move.from_square)
 
         moving_onehot = np.zeros(6, dtype=np.float32)
-
-        if moving_piece is not None:
+        if moving_piece:
             moving_onehot[moving_piece.piece_type - 1] = 1.0
 
-        # captured piece
-
-        if board.is_en_passant(move):
+        if is_padding:
+            captured_type = None
+        elif board.is_en_passant(move):
             captured_type = chess.PAWN
         else:
             captured = board.piece_at(move.to_square)
             captured_type = captured.piece_type if captured else None
 
         capture_onehot = np.zeros(7, dtype=np.float32)
-
-        if captured_type is None:
-            capture_onehot[0] = 1.0
-        else:
-            capture_onehot[captured_type] = 1.0
-
-        # promotion
+        capture_onehot[0 if captured_type is None else captured_type] = 1.0
 
         promotion_onehot = np.zeros(5, dtype=np.float32)
+        promotion_index = 0 if move.promotion is None else {
+            chess.KNIGHT: 1,
+            chess.BISHOP: 2,
+            chess.ROOK: 3,
+            chess.QUEEN: 4
+        }[move.promotion]
 
-        if move.promotion is None:
-            promotion_onehot[0] = 1.0
-        else:
-            promotion_onehot[
-                {
-                    chess.KNIGHT: 1,
-                    chess.BISHOP: 2,
-                    chess.ROOK: 3,
-                    chess.QUEEN: 4
-                }[move.promotion]
-            ] = 1.0
-        # engine eval
-        if eval[idx] and eval[0]:
-            eval_diff = eval[idx] - eval[0]
-        elif not eval[idx]:
-            eval[idx] = 10000
-            eval_diff = eval[idx] - eval[0] #there was a bug here , it should now only give neg eval to the other moves if a mating move exists
-        #############################
+        promotion_onehot[promotion_index] = 1.0
 
-        feature = np.concatenate([
-            np.array(
-                [from_rank,
-                 from_file,
-                 to_rank,
-                 to_file,
-                 eval_diff],
-                dtype=np.float32
-            ),
+        features = np.concatenate([
+            np.array([
+                chess.square_rank(move.from_square) if not is_padding else 0,
+                chess.square_file(move.from_square) if not is_padding else 0,
+                chess.square_rank(move.to_square) if not is_padding else 0,
+                chess.square_file(move.to_square) if not is_padding else 0,
+                evaluation,
+                is_padding,
+                is_mate
+            ], dtype=np.float32),
             moving_onehot,
             capture_onehot,
             promotion_onehot
         ])
 
-        move_features.append(feature)
+        move_features.append(features)
 
-    move_tensor = torch.tensor(move_features, dtype=torch.float32)
+    move_tensor = torch.from_numpy(
+        np.asarray(move_features, dtype=np.float32)
+    )
 
-    return board_tensor, move_tensor
+    return board_tensor, move_tensor, candidate_moves

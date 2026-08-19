@@ -1,9 +1,6 @@
-# this is supposed to prcoess the saved samples in white_dataset_samples.pkl and the black one too , to fit the to_tensor fn 
-# @title
 import pickle
 import copy
 import numpy as np
-
 
 DATASETS = [
     "white_dataset_samples.pkl",
@@ -11,72 +8,69 @@ DATASETS = [
 ]
 
 OUTPUT_SUFFIX = "_processed"
+
 EVAL_SCALE = 400.0
-EVAL_DROPOUT = 1
+EVAL_DROPOUT = 0.50
 NUM_CANDIDATES = 13
 DUMMY_MOVE = "0000"
 
-def normalize_eval(eval_cp):
-    if eval_cp is None:
+
+def normalize_eval(x):
+    if x is None:
         return 0.0
-    return float(np.tanh(eval_cp / EVAL_SCALE))
+    return float(np.tanh(x / EVAL_SCALE))
 
 
 def process_dataset(dataset):
-    samples = copy.deepcopy(dataset)
+    processed = copy.deepcopy(dataset)
+
     dropout_count = 0
     padding_count = 0
 
-    for sample_index, sample in enumerate(samples):
-        moves = sample["candidate_moves_uci"]
-        raw_evals = sample["eval"]
+    for sample in processed:
+        moves = sample["candidate_moves_uci"][:NUM_CANDIDATES]
+        raw_evals = sample["eval"][:len(moves)]
 
-        real_evals = raw_evals[:len(moves)]
+        evals = [normalize_eval(x) for x in raw_evals]
 
-        if len(real_evals) != len(moves):
-            print(
-                f"WARNING sample {sample_index}: "
-                f"{len(moves)} moves, "
-                f"{len(real_evals)} usable evaluations"
-            )
-            continue
+        # Real candidates
+        is_padding = [0.0] * len(moves)
 
-        normalized_evals = []
+        # Mate cannot be recovered reliably from these saved samples
+        is_mate = [0.0] * len(moves)
 
-        for evaluation in real_evals:
-            normalized_evals.append(
-                normalize_eval(evaluation)
-            )
-
-
+        # Evaluation dropout
         if np.random.random() < EVAL_DROPOUT:
-
-            normalized_evals = [0.0 for _ in normalized_evals]
+            evals = [0.0] * len(evals)
             dropout_count += 1
 
+        # Pad to 13 candidates
         while len(moves) < NUM_CANDIDATES:
-
             moves.append(DUMMY_MOVE)
-            normalized_evals.append(-10000.0)
+            evals.append(0.0)
+            is_padding.append(1.0)
+            is_mate.append(0.0)
             padding_count += 1
 
         sample["candidate_moves_uci"] = moves
-        sample["eval"] = normalized_evals
+        sample["eval"] = evals
+        sample["is_padding"] = is_padding
+        sample["is_mate"] = is_mate
 
-    print(f"Samples: {len(samples)}")
+    print(f"Samples: {len(processed)}")
     print(f"Evaluation dropout: {dropout_count}")
     print(f"Dummy candidates added: {padding_count}")
 
-    return samples
+    return processed
+
 
 for filename in DATASETS:
-
     print(f"\nProcessing {filename}...")
 
     with open(filename, "rb") as f:
         dataset = pickle.load(f)
 
-    processed_dataset = process_dataset(dataset)
+    processed = process_dataset(dataset)
 
     output_filename = filename.replace(
         ".pkl",
@@ -84,6 +78,6 @@ for filename in DATASETS:
     )
 
     with open(output_filename, "wb") as f:
-        pickle.dump(processed_dataset, f)
+        pickle.dump(processed, f)
 
     print(f"Saved: {output_filename}")

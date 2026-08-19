@@ -6,7 +6,7 @@ import chess.engine
 from tensor import to_tensor
 from model import ChessPolicyNet
 
-MODEL_PATH = "chess_policy_net_weights3.pth"
+MODEL_PATH = "models/chess_policy_net_weights4.pth"
 
 STOCKFISH_PATH = "./stockfish\stockfish\stockfish-windows-x86-64-avx2.exe"
 
@@ -91,7 +91,7 @@ def predict_position(board, engine):
 
     is_black = board.turn == chess.BLACK
 
-    board_tensor, moves_tensor = to_tensor( board, candidate_moves, candidate_evals, black=is_black)
+    board_tensor, moves_tensor , candidate_moves= to_tensor( board, candidate_moves, candidate_evals, black=is_black)
 
     board_tensor = board_tensor.unsqueeze(0)
     moves_tensor = moves_tensor.unsqueeze(0)

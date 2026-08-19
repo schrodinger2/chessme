@@ -11,24 +11,26 @@ class ChessPolicyNet(nn.Module):
         # board encoder
         self.conv1 = nn.Conv2d(12, 32, 3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
-        self.conv3 = nn.Conv2d(64, 64, 3, padding=1)
+        self.conv3 = nn.Conv2d(64, 96, 3, padding=1)
 
-        self.board_fc = nn.Linear(64 * 8 * 8, 256)
+        self.board_fc = nn.Linear(96 * 8 * 8, 384)
 
         # move encoder
-        self.move_fc = nn.Linear(23, 32)
+        self.move_fc = nn.Linear(27, 48)
 
         # combined decision head
         self.head = nn.Sequential(
-            nn.Linear(256 + 32, 128),
+            nn.Linear(384 + 48, 192),
             nn.ReLU(),
-            nn.Linear(128, 1)
+            nn.Linear(192, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
         )
 
     def forward(self, board, moves):
         """
         board: (batch, 12, 8, 8)
-        moves: (batch, 13, 4)
+        moves: (batch, 13, 25)
         """
 
         batch = board.shape[0]
@@ -45,7 +47,7 @@ class ChessPolicyNet(nn.Module):
 
         for i in range(13):
 
-            move = moves[:, i, :]  # (batch, 4)
+            move = moves[:, i, :]  # (batch, 25)
 
             move_feat = F.relu(self.move_fc(move))
 
@@ -58,4 +60,3 @@ class ChessPolicyNet(nn.Module):
         scores = torch.cat(scores, dim=1)  # (batch, 13)
 
         return scores
-    

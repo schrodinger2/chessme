@@ -20,10 +20,6 @@ version 2
 i used evaluation dropout of 20% as opposed to not using it on the first run and counter intutively the model is now only choosing stockfish's best move just about always
 Top-K accuracy:
   Top- 1:  3811/10055 (37.90%)
-  Top- 3:  6517/10055 (64.81%)
-  Top- 5:  7668/10055 (76.26%)
-  Top-10:  8881/10055 (88.32%)
-  Top-13:  9276/10055 (92.25%)
 Average P(actual move) when candidate exists: 0.4034
 Median P(actual move): 0.0000
 Mean Reciprocal Rank: 0.5883
@@ -33,24 +29,73 @@ droping the whole evaluation feature in validition only yields :
 Top-K accuracy:
   Top- 1:  1042/10055 (10.36%)
   Top- 3:  2605/10055 (25.91%)
-  Top- 5:  4026/10055 (40.04%)
-  Top-10:  7359/10055 (73.19%)
-  Top-13:  9276/10055 (92.25%)
 Average P(actual move) when candidate exists: 0.0831
 Median P(actual move): 0.0318
 Mean Reciprocal Rank: 0.2817
 we can safely assume the model has been trained to be heavly reliant on evaluation alone
 
+###########################################################
 version 3 
 dropped out the eval completely from training 
 validation with eval 
+Top- 1:  3722/10055 (37.02%)
+Average P(actual move) when candidate exists: 0.3932
+Median P(actual move): 0.0000
+Mean Reciprocal Rank: 0.5817
 
 validation with no eval
   Top- 1:  1740/10055 (17.30%)
-  Top- 3:  3373/10055 (33.55%)
-  Top- 5:  4706/10055 (46.80%)
-  Top-10:  7432/10055 (73.91%)
-  Top-13:  9276/10055 (92.25%)
 Average P(actual move) when candidate exists: 0.1166
 Median P(actual move): 0.0676
 Mean Reciprocal Rank: 0.3494
+
+deduction : the evaluation of the padded moves being set to -10000 is encourging the model to choose the highest eval
+solution : i am going to make a new seperate feature for padded moves and a new feature for mate
+
+#################################################################
+version 4 
+with eval: 
+Top-K accuracy:
+  Top- 1:  3590/10055 (35.70%)
+Average P(actual move) when candidate exists: 0.2443
+Median P(actual move): 0.1394
+Mean Reciprocal Rank: 0.5668
+
+without eval : 
+Top-K accuracy:
+  Top- 1:  2768/10055 (27.53%)
+Average P(actual move) when candidate exists: 0.1770
+Median P(actual move): 0.1019
+Mean Reciprocal Rank: 0.4742
+
+///////////////////////////////////////////////////////////////////////
+tensor([ 9,  0,  2,  3,  4, 12,  1,  6,  7, 11,  5, 10,  8])
+tensor([ 1,  6,  8,  0,  2,  4,  5,  3, 12,  7,  9, 10, 11])
+tensor([ 0,  3,  2,  9,  4, 10,  1,  5,  7, 11,  8, 12,  6])
+tensor([ 3,  2,  4,  1,  5,  0,  8,  6, 10,  7,  9, 11, 12])
+tensor([ 0,  2,  1,  7,  8,  3,  4,  6,  5, 11,  9, 10, 12])
+tensor([ 0,  2, 12,  1,  3,  9,  6,  5, 10,  4,  8, 11,  7])
+tensor([ 1,  3,  0,  4, 11,  2,  9,  5,  7, 10, 12,  6,  8])
+tensor([12,  3,  0,  2,  8,  4,  1,  9,  5,  7,  6, 11, 10])
+looking at the order of pridicted candidate moves that the model made , nothing weird
+/////////////////////////////////////////////////////////////////////////////////
+###################################################################################################
+version 5
+Epoch 1/12, Train Loss: 2.0574, Val Loss: 1.9549, Current LR: 0.000500
+Epoch 2/12, Train Loss: 1.9400, Val Loss: 1.9260, Current LR: 0.000500
+Epoch 3/12, Train Loss: 1.9013, Val Loss: 1.8997, Current LR: 0.000500
+Epoch 4/12, Train Loss: 1.8692, Val Loss: 1.8815, Current LR: 0.000500
+Epoch 5/12, Train Loss: 1.8414, Val Loss: 1.8720, Current LR: 0.000500
+Epoch 6/12, Train Loss: 1.8114, Val Loss: 1.8648, Current LR: 0.000500
+Epoch 7/12, Train Loss: 1.7766, Val Loss: 1.8696, Current LR: 0.000500
+Epoch 8/12, Train Loss: 1.7352, Val Loss: 1.8856, Current LR: 0.000500
+Epoch 9/12, Train Loss: 1.6870, Val Loss: 1.9260, Current LR: 0.000500
+Epoch 10/12, Train Loss: 1.6335, Val Loss: 1.9769, Current LR: 0.000500
+Epoch 11/12, Train Loss: 1.5781, Val Loss: 2.0068, Current LR: 0.000500
+Epoch 12/12, Train Loss: 1.5256, Val Loss: 2.0453, Current LR: 0.000500
+Training finished.
+observation : overfitting
+suspect : model now has too much capacity 
+solution : revert back to the old policy
+
+

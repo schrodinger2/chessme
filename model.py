@@ -15,11 +15,11 @@ class ChessPolicyNet(nn.Module):
         self.board_fc = nn.Linear(64 * 8 * 8, 256)
 
         # move encoder
-        self.move_fc = nn.Linear(23, 32)
+        self.move_fc = nn.Linear(25, 48)
 
         # combined decision head
         self.head = nn.Sequential(
-            nn.Linear(256 + 32, 128),
+            nn.Linear(256 + 48, 128),
             nn.ReLU(),
             nn.Linear(128, 1)
         )
@@ -27,7 +27,7 @@ class ChessPolicyNet(nn.Module):
     def forward(self, board, moves):
         """
         board: (batch, 12, 8, 8)
-        moves: (batch, 13, 4)
+        moves: (batch, 13, 25)
         """
 
         batch = board.shape[0]
@@ -44,7 +44,7 @@ class ChessPolicyNet(nn.Module):
 
         for i in range(13):
 
-            move = moves[:, i, :]  # (batch, 4)
+            move = moves[:, i, :]  # (batch, 25)
 
             move_feat = F.relu(self.move_fc(move))
 
