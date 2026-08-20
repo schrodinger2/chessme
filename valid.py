@@ -6,7 +6,7 @@ import chess.engine
 from tensor import to_tensor
 from model import ChessPolicyNet
 
-MODEL_PATH = "models/chess_policy_net_weights7.pth"
+MODEL_PATH = "models/chess_policy_net_weights8.pth"
 
 STOCKFISH_PATH = "./stockfish\stockfish\stockfish-windows-x86-64-avx2.exe"
 

@@ -167,3 +167,15 @@ tensor([ 2,  0,  1,  6,  3,  4, 11, 10,  9,  5,  7, 12,  8])
 tensor([11,  1,  2,  4,  3,  0,  5, 10,  6,  7,  8,  9, 12])
 ##################################################################################
 version 9 :
+
+
+Epoch 1/12, Train Loss: 1.9098, Val Loss: 1.8376, Current LR: 0.000500
+Epoch 2/12, Train Loss: 1.8177, Val Loss: 1.7969, Current LR: 0.000500
+Epoch 3/12, Train Loss: 1.7898, Val Loss: 1.7799, Current LR: 0.000500
+Epoch 4/12, Train Loss: 1.7668, Val Loss: 1.7668, Current LR: 0.000500
+Epoch 5/12, Train Loss: 1.7466, Val Loss: 1.7572, Current LR: 0.000500
+Epoch 6/12, Train Loss: 1.7270, Val Loss: 1.7534, Current LR: 0.000500
+Epoch 7/12, Train Loss: 1.7077, Val Loss: 1.7458, Current LR: 0.000500
+Epoch 8/12, Train Loss: 1.6869, Val Loss: 1.7398, Current LR: 0.000500 -> best by far
+Epoch 9/12, Train Loss: 1.6642, Val Loss: 1.7446, Current LR: 0.000500
+Epoch 10/12, Train Loss: 1.6406, Val Loss: 1.7499, Current LR: 0.000500
