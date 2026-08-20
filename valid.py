@@ -6,7 +6,7 @@ import chess.engine
 from tensor import to_tensor
 from model import ChessPolicyNet
 
-MODEL_PATH = "models/chess_policy_net_weights4.pth"
+MODEL_PATH = "models/chess_policy_net_weights7.pth"
 
 STOCKFISH_PATH = "./stockfish\stockfish\stockfish-windows-x86-64-avx2.exe"
 
@@ -103,7 +103,7 @@ def predict_position(board, engine):
         probabilities = torch.softmax(scores, dim=1)[0]
 
     ranked_indices = torch.argsort( probabilities, descending=True)
-
+    print(ranked_indices)
     ranked_moves = [candidate_moves[i] for i in ranked_indices]
 
     ranked_probabilities = [ probabilities[i].item() for i in ranked_indices]
