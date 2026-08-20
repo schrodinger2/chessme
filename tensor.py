@@ -50,6 +50,11 @@ def to_tensor(board, candidate_moves, evals, black):
 
         if is_padding:
             evaluation = 0.0
+        is_capture = float(board.is_capture(move))
+        # board.push(move)
+        # is_check = float(board.is_check())
+        # board.pop()
+        is_check = float(board.gives_check(move))
 
         moving_piece = None if is_padding else board.piece_at(move.from_square)
 
@@ -86,7 +91,9 @@ def to_tensor(board, candidate_moves, evals, black):
                 chess.square_file(move.to_square) if not is_padding else 0,
                 evaluation,
                 is_padding,
-                is_mate
+                is_mate,
+                is_capture,
+                is_check
             ], dtype=np.float32),
             moving_onehot,
             capture_onehot,
