@@ -2,24 +2,26 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class ChessPolicyNet(nn.Module):
 
     def __init__(self):
         super().__init__()
 
         # board encoder
+        # Board encoder
         self.conv1 = nn.Conv2d(12, 32, 3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
         self.conv3 = nn.Conv2d(64, 64, 3, padding=1)
 
         self.board_fc = nn.Linear(64 * 8 * 8, 256)
 
-        # move encoder
-        self.move_fc = nn.Linear(25, 48)
+        # Move encoder
+        self.move_fc = nn.Linear(27, 40)
 
-        # combined decision head
+        # Decision head
         self.head = nn.Sequential(
-            nn.Linear(256 + 48, 128),
+            nn.Linear(256 + 40, 128),
             nn.ReLU(),
             nn.Linear(128, 1)
         )
