@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chess Bot</title>
+
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/chess.min.js"></script>
+
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+</head>
+
+<body>
+
+<div class="overlay">
+
+    <div class="left">
+
+        <h1>♞ Chess Bot</h1>
+
+        <div id="board"></div>
+
+    </div>
+
+    <div class="right">
+
+        <div class="panel">
+
+            <h2>Your Turn</h2>
+
+            <p id="status">
+                White to move
+            </p>
+
+        </div>
+
+        <div class="panel">
+
+            <button id="newGame">
+                New Game
+            </button>
+
+            <button id="flip">
+                Flip Board
+            </button>
+
+        </div>
+
+        <div class="panel">
+
+            <h2>Move History</h2>
+
+            <div id="history"></div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+
+</html>

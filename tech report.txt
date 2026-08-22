@@ -1,4 +1,17 @@
+commercial bots of grandmaster players with 200k+ games still have it hard to mimick the player's style , i only have 5k of my games
+implementing a seperate opening book would help mimic my openings and force the later neural networks into similar positions to the ones it was trained on
+relative coloring instead of white and black to extend the data
+i can double the training data yet again by flipping every position left to right , this offcourse wont work for castling positions
+draw by repeatition would require the model to know the previous moves too 
+the data that i have is sampled from my style over 5 years which in it self is a prolbem because my style varied seriously 
+hence i couldnt shuffle the training data because i needed to assign higher LR for the new data (my 2100 elo style) and lower LR for my old data (my 900 elo style)
+handling variable input size is a must (sometimes the model only has 1 forced move and sometimes 13 to choose from)
 no library to create the openingBook.bin
-transposition
-blunders are really rare 
-split over games not moves because of the correlation between moves
+transposition proposes problems for the openingbook if a position has been reached but thru another sequence , although rare and could be handled by the later model
+blunders are really rare , making it espcially hard to make a model that blunders in my style 
+val/tain split over games not moves because of the correlation between moves
+correlated postitions from the same game make the dataset effectively smaller
+style is hard to measure -> i checked if my played move come it in the model's top_k moves , and checked accuracy according to stockfish if it matches mine
+since landing in the same position twice is really rare i can not use soft max and have to use a hard [0,1] scoring
+weight decay was neccassary to prevent early overfitting
+engine evaluation as a feauture needs dropout depending on how relatively infromative the other features are
