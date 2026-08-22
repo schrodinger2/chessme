@@ -103,7 +103,7 @@ def predict_position(board, engine):
         probabilities = torch.softmax(scores, dim=1)[0]
 
     ranked_indices = torch.argsort( probabilities, descending=True)
-    print(ranked_indices)
+    
     ranked_moves = [candidate_moves[i] for i in ranked_indices]
 
     ranked_probabilities = [ probabilities[i].item() for i in ranked_indices]
