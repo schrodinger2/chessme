@@ -2,17 +2,6 @@ import chess
 import numpy as np
 import torch
 
-NUM_CANDIDATES = 13
-EVAL_SCALE = 400.0
-DUMMY_MOVE = chess.Move.from_uci("0000")
-
-
-def normalize_eval(x):
-    if x is None:
-        return 0.0
-    return float(np.tanh(x / EVAL_SCALE))
-
-
 def to_tensor(board, candidate_moves, evals, black):
 
     board_planes = np.zeros((12, 8, 8), dtype=np.float32)
@@ -32,39 +21,32 @@ def to_tensor(board, candidate_moves, evals, black):
 
     board_tensor = torch.from_numpy(board_planes)
 
-    candidate_moves = list(candidate_moves)
-    evals = list(evals)
-
-    # Pad to 13 candidates
-    while len(candidate_moves) < NUM_CANDIDATES:
-        candidate_moves.append(DUMMY_MOVE)
-        evals.append(None)
-
     move_features = []
 
-    for move, raw_eval in zip(candidate_moves, evals):
+    while len(candidate_moves) < 13:
+            candidate_moves.append("0000")
+            evals.append(0.0)
 
-        is_padding = float(move == DUMMY_MOVE)
-        is_mate = float(raw_eval is None and not is_padding)
-        evaluation = normalize_eval(raw_eval)
 
-        if is_padding:
-            evaluation = 0.0
+
+    for i, move in enumerate(candidate_moves):
+
+        is_padding = float(move == chess.Move.from_uci("0000"))
+        is_mate = float(evals[i] == None)
+
         is_capture = float(board.is_capture(move))
         # board.push(move)
         # is_check = float(board.is_check())
         # board.pop()
         is_check = float(board.gives_check(move))
 
-        moving_piece = None if is_padding else board.piece_at(move.from_square)
+        moving_piece = board.piece_at(move.from_square)
 
         moving_onehot = np.zeros(6, dtype=np.float32)
         if moving_piece:
             moving_onehot[moving_piece.piece_type - 1] = 1.0
 
-        if is_padding:
-            captured_type = None
-        elif board.is_en_passant(move):
+        if board.is_en_passant(move):
             captured_type = chess.PAWN
         else:
             captured = board.piece_at(move.to_square)
@@ -74,22 +56,20 @@ def to_tensor(board, candidate_moves, evals, black):
         capture_onehot[0 if captured_type is None else captured_type] = 1.0
 
         promotion_onehot = np.zeros(5, dtype=np.float32)
-        promotion_index = 0 if move.promotion is None else {
+        promotion_onehot[0 if move.promotion is None else {
             chess.KNIGHT: 1,
             chess.BISHOP: 2,
             chess.ROOK: 3,
             chess.QUEEN: 4
-        }[move.promotion]
-
-        promotion_onehot[promotion_index] = 1.0
+        }[move.promotion]] = 1.0
 
         features = np.concatenate([
             np.array([
-                chess.square_rank(move.from_square) if not is_padding else 0,
-                chess.square_file(move.from_square) if not is_padding else 0,
-                chess.square_rank(move.to_square) if not is_padding else 0,
-                chess.square_file(move.to_square) if not is_padding else 0,
-                evaluation,
+                chess.square_rank(move.from_square),
+                chess.square_file(move.from_square),
+                chess.square_rank(move.to_square),
+                chess.square_file(move.to_square),
+                evals[i],
                 is_padding,
                 is_mate,
                 is_capture,
@@ -102,8 +82,9 @@ def to_tensor(board, candidate_moves, evals, black):
 
         move_features.append(features)
 
-    move_tensor = torch.from_numpy(
-        np.asarray(move_features, dtype=np.float32)
+    move_tensor = torch.tensor(
+        np.asarray(move_features),
+        dtype=torch.float32
     )
 
-    return board_tensor, move_tensor, candidate_moves
+    return board_tensor, move_tensor
