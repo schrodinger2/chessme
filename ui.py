@@ -9,7 +9,7 @@ from model import ChessPolicyNet
 from openingBook import OpeningBook
 
 
-MODEL_PATH = "chess_policy_net_weights.pth"
+MODEL_PATH = ".\models\chess_policy_net_weights8.pth"
 OPENING_BOOK_PATH = "custom_opening_book.pkl"
 
 STOCKFISH_PATH = "./stockfish\stockfish\stockfish-windows-x86-64-avx2.exe"
@@ -56,18 +56,6 @@ PIECE_NAMES = {
     "q": "bQ",
     "k": "bK",
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 print("Loading model...")
@@ -269,13 +257,10 @@ def choose_move(board):
 
 
 def draw_board(screen, board, selected_square=None):
-
+    
     for row in range(8):
 
         for col in range(8):
-
-            # Convert screen row to chess rank.
-            # Screen row 0 = rank 8.
             rank = 7 - row
             file = col
 
@@ -283,45 +268,32 @@ def draw_board(screen, board, selected_square=None):
                 file,
                 rank
             )
-
-            # Board color
-            if (row + col) % 2 == 0:
-                color = LIGHT
-            else:
-                color = DARK
-
-            # Highlight selected square
-            if square == selected_square:
-                color = SELECTED_COLOR
-
+            piece = board.piece_at(square)
             x = BOARD_X + col * SQUARE_SIZE
             y = BOARD_Y + row * SQUARE_SIZE
-
-            pygame.draw.rect(
-                screen,
-                color,
-                (
-                    x,
-                    y,
-                    SQUARE_SIZE,
-                    SQUARE_SIZE
-                )
-            )
-
-            # ------------------------------------------------
-            # Draw piece
-            # ------------------------------------------------
-
-            piece = board.piece_at(square)
-
             if piece is not None:
 
-                draw_piece(
-                    screen,
-                    piece,
-                    x,
-                    y
-                )
+                draw_piece(screen,piece, x, y)
+
+
+import random
+import pygame
+
+def load_random_board():
+    """
+    this is basically a preloader of the board so that i dont have to load it every frame
+    """
+    board_num = random.randint(1, 6)
+    image = pygame.image.load(
+        f"board/{board_num}.jpg"
+    ).convert()
+
+    return pygame.transform.scale(
+        image,
+        (8 * SQUARE_SIZE, 8 * SQUARE_SIZE)
+    )
+
+
 
 
 def draw_piece(screen, piece, x, y):
@@ -554,7 +526,6 @@ def reset_game():
 # ============================================================
 
 def main():
-
     pygame.init()
 
     screen = pygame.display.set_mode(
@@ -598,6 +569,9 @@ def main():
     # --------------------------------------------------------
 
     player_color = chess.WHITE
+
+    board_image = load_random_board()
+
 
     while running:
 
@@ -705,6 +679,8 @@ def main():
                             "You played:",
                             board.san(move)
                         )
+                        board_image = load_random_board()
+
 
                         board.push(move)
 
@@ -788,13 +764,8 @@ def main():
 
 
         screen.fill(BACKGROUND)
-
-        draw_board(
-            screen,
-            board,
-            selected_square
-        )
-
+        screen.blit(board_image, (BOARD_X, BOARD_Y))
+        draw_board(screen,board,selected_square)
         draw_legal_moves(
             screen,
             board,
