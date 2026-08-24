@@ -1,4 +1,5 @@
 import os
+import random
 import pickle
 import pygame
 import chess
@@ -9,10 +10,27 @@ from model import ChessPolicyNet
 from openingBook import OpeningBook
 
 
-MODEL_PATH = ".\models\chess_policy_net_weights8.pth"
+# ============================================================
+# PATHS
+# ============================================================
+
+MODEL_PATH = ".\\models\\chess_policy_net_weights8.pth"
 OPENING_BOOK_PATH = "custom_opening_book.pkl"
 
-STOCKFISH_PATH = "./stockfish\stockfish\stockfish-windows-x86-64-avx2.exe"
+STOCKFISH_PATH = "./stockfish\\stockfish\\stockfish-windows-x86-64-avx2.exe"
+
+BOARD_IMAGE_FOLDER = "board"
+PIECE_IMAGE_FOLDER = "chess_pieces"
+
+# Single static images.
+BACKGROUND_IMAGE_PATH = "animations/background.jpg"
+NEUTRAL_IMAGE_PATH = "animations/neutral.png"
+MAD_IMAGE_PATH = "animations/mad.png"
+
+
+# ============================================================
+# LAYOUT (filled in at runtime once we know the screen size)
+# ============================================================
 
 WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 760
@@ -23,52 +41,38 @@ BOARD_X = 30
 BOARD_Y = 30
 
 SIDE_PANEL_X = BOARD_X + BOARD_SIZE + 30
+SIDE_PANEL_WIDTH = 240
 
-LIGHT = (45, 120, 70)
-DARK = (90, 90, 90)
-
-SELECTED_COLOR = (100, 180, 100)
+MARGIN = 40
+SIDE_PANEL_MIN_WIDTH = 380
 
 MOVE_DOT_COLOR = (40, 40, 40)
 
-# Text colors
 TEXT_COLOR = (240, 240, 240)
+MUTED_TEXT_COLOR = (190, 190, 190)
 BACKGROUND = (25, 25, 25)
 
-# Piece colors
-WHITE_PIECE_COLOR = (120, 75, 35)   # brown
-BLACK_PIECE_COLOR = (45, 120, 70)   # green
+PANEL_BG = (20, 20, 20, 165)
+BUBBLE_BG = (245, 245, 245, 235)
+BUBBLE_BORDER = (25, 25, 25, 255)
+BUBBLE_TEXT = (20, 20, 20)
 
 PIECE_IMAGES = {}
 
 PIECE_NAMES = {
-    "P": "wP",
-    "N": "wN",
-    "B": "wB",
-    "R": "wR",
-    "Q": "wQ",
-    "K": "wK",
-
-    "p": "bP",
-    "n": "bN",
-    "b": "bB",
-    "r": "bR",
-    "q": "bQ",
-    "k": "bK",
+    "P": "wP", "N": "wN", "B": "wB", "R": "wR", "Q": "wQ", "K": "wK",
+    "p": "bP", "n": "bN", "b": "bB", "r": "bR", "q": "bQ", "k": "bK",
 }
 
+
+# ============================================================
+# MODEL / OPENING BOOK / ENGINE SETUP
+# ============================================================
 
 print("Loading model...")
 
 model = ChessPolicyNet()
-
-model.load_state_dict(
-    torch.load(
-        MODEL_PATH,
-        map_location="cpu"
-    )
-)
-
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
 model.eval()
 
 print("Loading opening book...")
@@ -76,9 +80,7 @@ print("Loading opening book...")
 try:
     with open(OPENING_BOOK_PATH, "rb") as f:
         loaded_opening_book = pickle.load(f)
-
     print("Opening book loaded.")
-
 except FileNotFoundError:
     print("WARNING: Opening book not found.")
     loaded_opening_book = None
@@ -87,437 +89,471 @@ except FileNotFoundError:
 engine = None
 
 if os.path.exists(STOCKFISH_PATH):
-
     try:
-        engine = chess.engine.SimpleEngine.popen_uci(
-            STOCKFISH_PATH
-        )
-
+        engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
         print("Stockfish loaded.")
-
     except Exception as e:
-
         print("WARNING: Could not start Stockfish.")
         print(e)
-
 else:
-
-    print(
-        f"WARNING: Stockfish not found at '{STOCKFISH_PATH}'."
-    )
+    print(f"WARNING: Stockfish not found at '{STOCKFISH_PATH}'.")
 
 
+# ============================================================
+# STATIC IMAGE LOADING
+# ============================================================
 
-
-
-def predict_next_move(
-    board,
-    stockfish_depth=8,
-    num_candidate_moves=13
-):
+def load_static_image(path, size=None, use_alpha=True):
     """
-    Use Stockfish to generate candidate moves and let the
-    neural network select one of them.
+    Load a single image as a pygame Surface, optionally scaled to
+    `size` = (w, h). Returns None (and prints a warning) if the file
+    is missing, so the game keeps running even without the art yet.
     """
 
-    if engine is None:
-
-        print("No Stockfish engine available.")
-
+    if not os.path.isfile(path):
+        print(f"WARNING: image not found: '{path}'")
         return None
 
     try:
-        # Ask Stockfish for candidate moves
+        if use_alpha:
+            image = pygame.image.load(path).convert_alpha()
+        else:
+            image = pygame.image.load(path).convert()
+    except Exception as e:
+        print(f"WARNING: could not load image '{path}': {e}")
+        return None
 
+    if size is not None:
+        image = pygame.transform.smoothscale(image, size)
+
+    return image
+
+
+# ============================================================
+# NEURAL NETWORK MOVE PREDICTION
+# ============================================================
+
+def predict_next_move(board, stockfish_depth=8, num_candidate_moves=13):
+    """
+    Use Stockfish to generate candidate moves and let the neural
+    network select one of them. Returns (move, eval) or None.
+    """
+
+    if engine is None:
+        print("No Stockfish engine available.")
+        return None
+
+    try:
         info = engine.analyse(
             board,
-            chess.engine.Limit(
-                depth=stockfish_depth
-            ),
-            multipv=num_candidate_moves
+            chess.engine.Limit(depth=stockfish_depth),
+            multipv=num_candidate_moves,
         )
 
-        stockfish_candidate_moves = [item['pv'][0] for item in info]
-        stockfish_candidate_eval = [item['score'].pov(board.turn).score() for item in info]
+        stockfish_candidate_moves = [item["pv"][0] for item in info]
+        stockfish_candidate_eval = [
+            item["score"].pov(board.turn).score() for item in info
+        ]
 
-        is_black_turn = (
-            board.turn == chess.BLACK
-        )
+        is_black_turn = board.turn == chess.BLACK
 
         board_tensor, moves_tensor = to_tensor(
             board,
             stockfish_candidate_moves,
             stockfish_candidate_eval,
-            black=is_black_turn
+            black=is_black_turn,
         )
 
-        # Add batch dimension
         board_tensor = board_tensor.unsqueeze(0)
         moves_tensor = moves_tensor.unsqueeze(0)
 
-        # ----------------------------------------------------
-        # Neural network prediction
-        # ----------------------------------------------------
-
         with torch.no_grad():
+            scores = model(board_tensor, moves_tensor)
+            probabilities = torch.softmax(scores, dim=1)
+            best_move_index = torch.argmax(probabilities, dim=1).item()
 
-            scores = model(
-                board_tensor,
-                moves_tensor
-            )
-
-            probabilities = torch.softmax(
-                scores,
-                dim=1
-            )
-
-            best_move_index = torch.argmax(
-                probabilities,
-                dim=1
-            ).item()
-
-        # Safety check
         if best_move_index >= len(stockfish_candidate_moves):
-
             print("Model returned invalid candidate index.")
-
             return None
 
-        chosen_move = (
-            stockfish_candidate_moves[
-                best_move_index
-            ]
-        )
+        chosen_move = stockfish_candidate_moves[best_move_index]
 
         print()
         print("Neural network candidates:")
 
         for i, move in enumerate(stockfish_candidate_moves):
-
             probability = (
-                probabilities[0, i].item()
-                if i < probabilities.shape[1]
-                else 0
+                probabilities[0, i].item() if i < probabilities.shape[1] else 0
             )
+            print(f"{i + 1:2d}. {board.san(move):6s} {probability:.3f}")
 
-            print(
-                f"{i + 1:2d}. "
-                f"{board.san(move):6s} "
-                f"{probability:.3f}"
-            )
+        print("Selected:", board.san(chosen_move))
 
-        print(
-            "Selected:",
-            board.san(chosen_move)
-        )
-
-        return chosen_move
+        return chosen_move, stockfish_candidate_eval[best_move_index]
 
     except Exception as e:
-
         print()
         print("ERROR during model prediction:")
         print(e)
-
         return None
+
+
+# ============================================================
+# TRASH TALK
+# ============================================================
+
+def trashtalker(eval, last_eval=0, opening=False, move=30):
+    diff = last_eval - eval  # because computer playing black
+
+    if opening:
+        talk = ["may the better saif win"]
+    elif eval > 5:
+        talk = ["you are walking the green mile now", "last words?", "متعيطش", "jeder versagt so $#&!$& manchmel"]
+        if move > 50:
+            talk.append("took longer than expected")
+        elif move > 15:
+            talk.append("what? do i really have to continue? this is beneath me")
+    elif eval > 2:
+        talk = ["slipping away too fast", "ich habe mir bessers vorgestellt", "can you last another 10 moves"]
+        if move > 50:
+            talk.append("finally")
+        elif move > 15:
+            talk.append("already?")
+    elif eval > 0:
+        talk = ["i am machine i never sleep, i keep my eyes wide open", "عاش", "i gotta wake up now"]
+        if move > 50:
+            talk.append("wont let you survive that long again")
+        elif move > 20:
+            talk.append("do you feel it ?")
+    elif eval > -2:
+        talk = ["wie viel sprachen sprichest du", "kein foreplay mehr", "jetzt reicht es"]
+        if move > 50:
+            talk.append("are you using an engine")
+        elif move > 20:
+            talk.append("not so fast, have a lil respect")
+    elif eval > -5:
+        talk = ["oh , cheats", "who cares about a board game anyways", "you should have played me when i still cared for this stupid game"]
+        if move > 50:
+            talk.append("it's cool to lose long games anyways only try hards focus that long")
+        elif move > 20:
+            talk.append("if i just stop bludering , haaa stupid rigorous game")
+    else:  # eval <= -5
+        talk = ["u got some odds on u", "i have always been into the cooler hobbies", "just how many chess books have you eaten"]
+        if move > 50:
+            talk.append("lowkey sus that you can't finish the game already")
+        elif move > 20:
+            talk.append("touch some grass nerd")
+
+    if diff > 3:
+        talk += [
+            "didnt think i still have it in me", "take your time", "le piece de resistance",
+            "was furs wunder was furs drama", "bit you didnt see it comming", "bout time u witness sum fun",
+        ]
+    if diff > 1:
+        talk += [
+            "calm down", "it hurts to mess up like this", "i tell you what , why not try ballet instead",
+            "is that all you got", "brother what is even that", "maybe you should use some engine cheating isn't that bad",
+        ]
+    if diff > -1 and diff > 0:
+        talk += [
+            "nein nein nein nein", "whatever", "es hat sich alles gedreht",
+            "das leben ist nur ein phase und der rest ist die holle", "if i only cared enough",
+        ]
+    if diff > -3:
+        talk += [
+            "i am PLAYING against myself", "i got a rope just in case", "let's hope i stop playing around",
+            "you are sooooo lucky", "verdammt", "life fits perfectly as a missing piece to all the escaped souls that never wish to comeback",
+        ]
+    if diff < -3:
+        talk += [
+            "what a nice daaay", "my troops are being idiots now", "je ne regrette rien",
+            "i am playing for the crowd ,really", "hope the give away doesn't seem too obvious", "take this game , you look like you need it",
+        ]
+
+    return talk[random.randint(0, len(talk) - 1)]
 
 
 # ============================================================
 # CHOOSE ENGINE MOVE
 # ============================================================
 
+last_eval = 0
+
+
 def choose_move(board):
     """
-    First try the opening book.
+    First try the opening book. If there is no book move, use the
+    neural network.
 
-    If there is no book move, use the neural network.
+    Returns: (move, source, text, mood)
+      source: "Opening Book" or "Neural Network"
+      mood:   "neutral" or "mad" -- "mad" when the bot's evaluation
+              got worse compared to its previous move.
     """
 
+    global last_eval
+
     starting_move_seq = list(board.move_stack)
-    book_move = loaded_opening_book.next(starting_move_seq)
+    book_move = (
+        loaded_opening_book.next(starting_move_seq)
+        if loaded_opening_book is not None
+        else None
+    )
 
     if book_move is not None:
-
         print()
-        print(
-            "Opening book:",
-            board.san(book_move)
-        )
+        print("Opening book:", board.san(book_move))
+        text = trashtalker(0, 0, True, len(board.move_stack))
+        return book_move, "Opening Book", text, "neutral"
 
-        return book_move, "Opening Book"
-
-    # Neural network
-    
     print()
     print("No opening-book move.")
 
-    move = predict_next_move(board)
+    result = predict_next_move(board)
 
-    return move, "Neural Network"
+    if result is None:
+        return None, "Neural Network", "...", "neutral"
 
+    move, eval_score = result
+
+    # Mate scores can come back as None from python-chess; fall back
+    # to the last known eval so the mood/trash-talk logic never crashes.
+    if eval_score is None:
+        eval_score = last_eval
+
+    text = trashtalker(eval_score, last_eval, False, len(board.move_stack))
+
+    mood = "mad" if eval_score < 0 else "neutral"
+
+    last_eval = eval_score
+
+    return move, "Neural Network", text, mood
+
+
+# ============================================================
+# BOARD / PIECE DRAWING
+# ============================================================
 
 def draw_board(screen, board, selected_square=None):
-    
     for row in range(8):
-
         for col in range(8):
             rank = 7 - row
             file = col
-
-            square = chess.square(
-                file,
-                rank
-            )
+            square = chess.square(file, rank)
             piece = board.piece_at(square)
+
             x = BOARD_X + col * SQUARE_SIZE
             y = BOARD_Y + row * SQUARE_SIZE
+
             if piece is not None:
+                draw_piece(screen, piece, x, y)
 
-                draw_piece(screen,piece, x, y)
-
-
-import random
-import pygame
 
 def load_random_board():
-    """
-    this is basically a preloader of the board so that i dont have to load it every frame
-    """
+    """Pick a random board texture. Only call this on real transitions,
+    not on every move, so the board stays put during a game phase."""
+
     board_num = random.randint(1, 6)
+
     image = pygame.image.load(
-        f"board/{board_num}.jpg"
+        os.path.join(BOARD_IMAGE_FOLDER, f"{board_num}.jpg")
     ).convert()
 
-    return pygame.transform.scale(
-        image,
-        (8 * SQUARE_SIZE, 8 * SQUARE_SIZE)
-    )
-
-
+    return pygame.transform.scale(image, (8 * SQUARE_SIZE, 8 * SQUARE_SIZE))
 
 
 def draw_piece(screen, piece, x, y):
-
     symbol = piece.symbol()
-
     image = PIECE_IMAGES[symbol]
+    screen.blit(image, (x, y))
 
-    screen.blit(
-        image,
-        (x, y)
-    )
 
+# ============================================================
+# TEXT / SPEECH BUBBLE HELPERS
+# ============================================================
+
+def wrap_text(text, font, max_width):
+    words = text.split(" ")
+    lines = []
+    current = ""
+
+    for word in words:
+        test = (current + " " + word).strip()
+
+        if font.size(test)[0] <= max_width:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
+
+    return lines
+
+
+def draw_speech_bubble(screen, font, text, x, y, width):
+    """Draws a rounded speech bubble with a small tail. Returns the
+    total height used (bubble + tail) so callers can lay out below it."""
+
+    if not text:
+        return 0
+
+    padding = 14
+    lines = wrap_text(text, font, width - 2 * padding)
+    line_height = font.get_height() + 4
+    bubble_height = line_height * len(lines) + 2 * padding
+
+    bubble_surface = pygame.Surface((width, bubble_height), pygame.SRCALPHA)
+    bubble_rect = bubble_surface.get_rect()
+
+    pygame.draw.rect(bubble_surface, BUBBLE_BG, bubble_rect, border_radius=16)
+    pygame.draw.rect(bubble_surface, BUBBLE_BORDER, bubble_rect, width=2, border_radius=16)
+
+    screen.blit(bubble_surface, (x, y))
+
+    ty = y + padding
+    for line in lines:
+        rendered = font.render(line, True, BUBBLE_TEXT)
+        screen.blit(rendered, (x + padding, ty))
+        ty += line_height
+
+    tail_w, tail_h = 22, 16
+    tail_x = x + 34
+    tail_points = [
+        (tail_x, y + bubble_height),
+        (tail_x + tail_w, y + bubble_height),
+        (tail_x, y + bubble_height + tail_h),
+    ]
+
+    pygame.draw.polygon(screen, BUBBLE_BG[:3], tail_points)
+    pygame.draw.polygon(screen, BUBBLE_BORDER[:3], tail_points, width=2)
+
+    return bubble_height + tail_h
+
+
+def draw_panel_backdrop(screen, rect, radius=18):
+    """Semi-transparent rounded panel so text stays readable over the
+    animated background."""
+
+    panel_surface = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+    pygame.draw.rect(panel_surface, PANEL_BG, panel_surface.get_rect(), border_radius=radius)
+    screen.blit(panel_surface, (rect.x, rect.y))
+
+
+# ============================================================
+# SIDE PANEL (character, speech bubble, game info)
+# ============================================================
 
 def draw_side_panel(
     screen,
     board,
     engine_source,
-    selected_square
+    selected_square,
+    character_frame,
+    speech_text,
 ):
-
-    font = pygame.font.SysFont(
-        "Arial",
-        22
-    )
-
-    small_font = pygame.font.SysFont(
-        "Arial",
-        17
-    )
+    font = pygame.font.SysFont("Arial", 24, bold=True)
+    small_font = pygame.font.SysFont("Arial", 18)
+    bubble_font = pygame.font.SysFont("Arial", 17)
 
     x = SIDE_PANEL_X
-    y = 40
+    panel_width = SIDE_PANEL_WIDTH
+
+    y = 30
 
     # --------------------------------------------------------
-    # Turn
+    # Character + speech bubble
     # --------------------------------------------------------
 
-    if board.turn == chess.WHITE:
+    char_size = min(panel_width, 280)
 
-        turn_text = "White to move"
-
+    if character_frame is not None:
+        frame = pygame.transform.smoothscale(character_frame, (char_size, char_size))
+        char_rect = frame.get_rect(topleft=(x, y))
+        draw_panel_backdrop(screen, char_rect.inflate(16, 16))
+        screen.blit(frame, char_rect.topleft)
     else:
+        char_rect = pygame.Rect(x, y, char_size, char_size)
+        draw_panel_backdrop(screen, char_rect)
 
-        turn_text = "Black to move"
+    bubble_y = y + char_size + 14
+    used = draw_speech_bubble(screen, bubble_font, speech_text, x, bubble_y, panel_width)
 
-    text = font.render(
-        turn_text,
-        True,
-        TEXT_COLOR
-    )
-
-    screen.blit(
-        text,
-        (x, y)
-    )
-
-    y += 45
+    y = bubble_y + used + 24
 
     # --------------------------------------------------------
-    # Engine source
+    # Game info panel
     # --------------------------------------------------------
 
-    text = small_font.render(
-        f"Engine: {engine_source}",
-        True,
-        TEXT_COLOR
-    )
+    info_top = y
+    info_lines = []
 
-    screen.blit(
-        text,
-        (x, y)
-    )
-
-    y += 40
-
-    # --------------------------------------------------------
-    # Move count
-    # --------------------------------------------------------
-
-    text = small_font.render(
-        f"Moves: {len(board.move_stack)}",
-        True,
-        TEXT_COLOR
-    )
-
-    screen.blit(
-        text,
-        (x, y)
-    )
-
-    y += 50
-
-    # --------------------------------------------------------
-    # Last move
-    # --------------------------------------------------------
+    turn_text = "White to move" if board.turn == chess.WHITE else "Black to move"
+    info_lines.append((turn_text, font, TEXT_COLOR))
+    info_lines.append((f"Engine: {engine_source}", small_font, MUTED_TEXT_COLOR))
+    info_lines.append((f"Moves: {len(board.move_stack)}", small_font, MUTED_TEXT_COLOR))
 
     if board.move_stack:
-
-        last_move = board.peek()
-
-        text = small_font.render(
-            f"Last move: {last_move.uci()}",
-            True,
-            TEXT_COLOR
-        )
-
-        screen.blit(
-            text,
-            (x, y)
-        )
-
-        y += 40
-
-    # --------------------------------------------------------
-    # Selected square
-    # --------------------------------------------------------
+        info_lines.append((f"Last move: {board.peek().uci()}", small_font, MUTED_TEXT_COLOR))
 
     if selected_square is not None:
+        info_lines.append((f"Selected: {chess.square_name(selected_square)}", small_font, MUTED_TEXT_COLOR))
 
-        square_name = chess.square_name(
-            selected_square
-        )
+    line_gap = 12
+    info_height = sum(f.get_height() for _, f, _ in info_lines) + line_gap * (len(info_lines) - 1) + 24
 
-        text = small_font.render(
-            f"Selected: {square_name}",
-            True,
-            TEXT_COLOR
-        )
+    draw_panel_backdrop(screen, pygame.Rect(x, info_top, panel_width, info_height))
 
-        screen.blit(
-            text,
-            (x, y)
-        )
+    ty = info_top + 12
+    for text, f, color in info_lines:
+        rendered = f.render(text, True, color)
+        screen.blit(rendered, (x + 14, ty))
+        ty += f.get_height() + line_gap
 
 
 # ============================================================
-# MOUSE → CHESS SQUARE
+# MOUSE -> CHESS SQUARE
 # ============================================================
 
 def mouse_to_square(mouse_x, mouse_y):
-
-    # Check if outside board
     if not (
         BOARD_X <= mouse_x < BOARD_X + BOARD_SIZE
-        and
-        BOARD_Y <= mouse_y < BOARD_Y + BOARD_SIZE
+        and BOARD_Y <= mouse_y < BOARD_Y + BOARD_SIZE
     ):
-
         return None
 
-    col = (
-        mouse_x - BOARD_X
-    ) // SQUARE_SIZE
+    col = (mouse_x - BOARD_X) // SQUARE_SIZE
+    row = (mouse_y - BOARD_Y) // SQUARE_SIZE
 
-    row = (
-        mouse_y - BOARD_Y
-    ) // SQUARE_SIZE
-
-    # Convert screen coordinates to chess coordinates
     file = col
     rank = 7 - row
 
-    return chess.square(
-        file,
-        rank
-    )
+    return chess.square(file, rank)
 
 
-# ============================================================
-# DRAW LEGAL MOVE DOTS
-# ============================================================
-
-def draw_legal_moves(
-    screen,
-    board,
-    selected_square
-):
-
+def draw_legal_moves(screen, board, selected_square):
     if selected_square is None:
         return
 
     for move in board.legal_moves:
-
         if move.from_square != selected_square:
             continue
 
-        file = chess.square_file(
-            move.to_square
-        )
-
-        rank = chess.square_rank(
-            move.to_square
-        )
+        file = chess.square_file(move.to_square)
+        rank = chess.square_rank(move.to_square)
 
         col = file
         row = 7 - rank
 
-        x = (
-            BOARD_X
-            + col * SQUARE_SIZE
-            + SQUARE_SIZE // 2
-        )
+        x = BOARD_X + col * SQUARE_SIZE + SQUARE_SIZE // 2
+        y = BOARD_Y + row * SQUARE_SIZE + SQUARE_SIZE // 2
 
-        y = (
-            BOARD_Y
-            + row * SQUARE_SIZE
-            + SQUARE_SIZE // 2
-        )
+        pygame.draw.circle(screen, MOVE_DOT_COLOR, (x, y), 10)
 
-        pygame.draw.circle(
-            screen,
-            MOVE_DOT_COLOR,
-            (x, y),
-            10
-        )
-
-
-# ============================================================
-# RESET GAME
-# ============================================================
 
 def reset_game():
-
     return chess.Board()
 
 
@@ -526,303 +562,231 @@ def reset_game():
 # ============================================================
 
 def main():
+    global WINDOW_WIDTH, WINDOW_HEIGHT
+    global BOARD_SIZE, SQUARE_SIZE, BOARD_X, BOARD_Y
+    global SIDE_PANEL_X, SIDE_PANEL_WIDTH
+
     pygame.init()
 
-    screen = pygame.display.set_mode(
-        (
-            WINDOW_WIDTH,
-            WINDOW_HEIGHT
-        )
-    )
+    # --------------------------------------------------------
+    # 1) Fullscreen, using the real desktop resolution
+    # --------------------------------------------------------
+
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    WINDOW_WIDTH, WINDOW_HEIGHT = screen.get_size()
+
+    pygame.display.set_caption("Chess Neural Network")
+
+    # --------------------------------------------------------
+    # Recompute layout for the real screen size. Board fills the
+    # available height (minus margins) but leaves room for the
+    # side panel; keep it a clean multiple of 8 for crisp squares.
+    # --------------------------------------------------------
+
+    available_height = WINDOW_HEIGHT - 2 * MARGIN
+    available_width_for_board = WINDOW_WIDTH - SIDE_PANEL_MIN_WIDTH - 3 * MARGIN
+
+    BOARD_SIZE = max(320, min(available_height, available_width_for_board))
+    BOARD_SIZE -= BOARD_SIZE % 8
+    SQUARE_SIZE = BOARD_SIZE // 8
+
+    BOARD_X = MARGIN
+    BOARD_Y = (WINDOW_HEIGHT - BOARD_SIZE) // 2
+
+    SIDE_PANEL_X = BOARD_X + BOARD_SIZE + MARGIN
+    SIDE_PANEL_WIDTH = WINDOW_WIDTH - SIDE_PANEL_X - MARGIN
+
+    # --------------------------------------------------------
+    # Load piece art now that SQUARE_SIZE is known
+    # --------------------------------------------------------
 
     for symbol, filename in PIECE_NAMES.items():
-
         image = pygame.image.load(
-            f"chess_pieces/{filename}.png"
+            os.path.join(PIECE_IMAGE_FOLDER, f"{filename}.png")
         ).convert_alpha()
 
-        image = pygame.transform.smoothscale(
-            image,
-            (SQUARE_SIZE, SQUARE_SIZE)
-        )
-
+        image = pygame.transform.smoothscale(image, (SQUARE_SIZE, SQUARE_SIZE))
         PIECE_IMAGES[symbol] = image
 
+    # --------------------------------------------------------
+    # 1) Static background, sized to the full screen
+    # --------------------------------------------------------
 
-    pygame.display.set_caption(
-        "Chess Neural Network"
+    background_image = load_static_image(
+        BACKGROUND_IMAGE_PATH,
+        size=(WINDOW_WIDTH, WINDOW_HEIGHT),
+        use_alpha=False,
     )
+
+    # --------------------------------------------------------
+    # 2) Character faces (neutral / mad), sized for the panel
+    # --------------------------------------------------------
+
+    char_size = min(SIDE_PANEL_WIDTH, 280)
+
+    mood_images = {
+        "neutral": load_static_image(NEUTRAL_IMAGE_PATH, size=(char_size, char_size)),
+        "mad": load_static_image(MAD_IMAGE_PATH, size=(char_size, char_size)),
+    }
 
     clock = pygame.time.Clock()
 
     board = chess.Board()
-
     selected_square = None
-
     engine_source = "Waiting"
-
     running = True
-
-    # --------------------------------------------------------
-    # Player is WHITE
-    # AI is BLACK
-    # --------------------------------------------------------
 
     player_color = chess.WHITE
 
     board_image = load_random_board()
 
+    # 4) Only regenerate the board when the source flips from the
+    # opening book to the neural network -- never on every move.
+    previous_source = None
+
+    # 2) Current mood driving which animation plays.
+    current_mood = "neutral"
+
+    # 3) Speech bubble only updates every random(4, 7) AI moves.
+    displayed_speech = "Let's play."
+    moves_since_last_speech = 0
+    speech_threshold = random.randint(4, 7)
 
     while running:
-
-        # ====================================================
-        # EVENTS
-        # ====================================================
+        clock.tick(60)
 
         for event in pygame.event.get():
-
-            # ------------------------------------------------
-            # Close window
-            # ------------------------------------------------
-
             if event.type == pygame.QUIT:
-
                 running = False
 
-            # ------------------------------------------------
-            # Mouse click
-            # ------------------------------------------------
+            elif event.type == pygame.KEYDOWN:
+                # Fullscreen has no window chrome -- give the user a
+                # reliable way out.
+                if event.key == pygame.K_ESCAPE:
+                    running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
-
-                # Don't allow moves while game is over
                 if board.is_game_over():
                     continue
 
-                # Only allow player to move when it is
-                # their turn.
                 if board.turn != player_color:
                     continue
 
                 mouse_x, mouse_y = event.pos
-
-                clicked_square = mouse_to_square(
-                    mouse_x,
-                    mouse_y
-                )
+                clicked_square = mouse_to_square(mouse_x, mouse_y)
 
                 if clicked_square is None:
                     continue
 
-                # ============================================
-                # Nothing selected yet
-                # ============================================
-
                 if selected_square is None:
+                    piece = board.piece_at(clicked_square)
 
-                    piece = board.piece_at(
-                        clicked_square
-                    )
-
-                    # Only select player's pieces
-                    if (
-                        piece is not None
-                        and
-                        piece.color == player_color
-                    ):
-
-                        selected_square = (
-                            clicked_square
-                        )
-
-                # ============================================
-                # Already selected something
-                # ============================================
+                    if piece is not None and piece.color == player_color:
+                        selected_square = clicked_square
 
                 else:
+                    move = chess.Move(selected_square, clicked_square)
 
-                    move = chess.Move(
-                        selected_square,
-                        clicked_square
-                    )
-
-                    # Promotion
                     if (
-                        chess.square_rank(
-                            clicked_square
-                        ) in (0, 7)
-                        and
-                        board.piece_at(
-                            selected_square
-                        )
-                        and
-                        board.piece_at(
-                            selected_square
-                        ).piece_type
-                        == chess.PAWN
+                        chess.square_rank(clicked_square) in (0, 7)
+                        and board.piece_at(selected_square)
+                        and board.piece_at(selected_square).piece_type == chess.PAWN
                     ):
-
                         move = chess.Move(
-                            selected_square,
-                            clicked_square,
-                            promotion=chess.QUEEN
+                            selected_square, clicked_square, promotion=chess.QUEEN
                         )
-
-                    # ========================================
-                    # Legal move
-                    # ========================================
 
                     if move in board.legal_moves:
-
                         print()
-                        print(
-                            "You played:",
-                            board.san(move)
-                        )
-                        board_image = load_random_board()
-
+                        print("You played:", board.san(move))
 
                         board.push(move)
-
                         selected_square = None
-
                         engine_source = "Thinking..."
 
-                        # ====================================
-                        # Check game over
-                        # ====================================
-
                         if board.is_game_over():
-
                             print()
-                            print(
-                                "Game over:",
-                                board.result()
-                            )
-
-                            engine_source = (
-                                "Game Over"
-                            )
+                            print("Game over:", board.result())
+                            engine_source = "Game Over"
 
                         else:
-
-                            # =================================
-                            # AI MOVE
-                            # =================================
-
-                            ai_move, source = choose_move(
-                                board
-                            )
+                            ai_move, source, text, mood = choose_move(board)
 
                             if ai_move is not None:
-
                                 print()
-                                print(
-                                    "AI played:",
-                                    board.san(ai_move)
-                                )
+                                print("AI played:", board.san(ai_move))
 
-                                board.push(
-                                    ai_move
-                                )
-
+                                board.push(ai_move)
                                 engine_source = source
+                                current_mood = mood
+
+                                # 4) Board only changes on the opening
+                                # book -> neural network transition.
+                                if previous_source == "Opening Book" and source == "Neural Network":
+                                    board_image = load_random_board()
+
+                                previous_source = source
+
+                                # 3) Speech bubble text refreshes only
+                                # every speech_threshold AI moves.
+                                moves_since_last_speech += 1
+
+                                if moves_since_last_speech >= speech_threshold:
+                                    displayed_speech = text
+                                    moves_since_last_speech = 0
+                                    speech_threshold = random.randint(4, 7)
 
                             else:
-
-                                print(
-                                    "AI could not find a move."
-                                )
-
-                                engine_source = (
-                                    "ERROR"
-                                )
-
-                    # ========================================
-                    # Clicked another own piece
-                    # ========================================
+                                print("AI could not find a move.")
+                                engine_source = "ERROR"
 
                     else:
+                        piece = board.piece_at(clicked_square)
 
-                        piece = board.piece_at(
-                            clicked_square
-                        )
-
-                        if (
-                            piece is not None
-                            and
-                            piece.color == player_color
-                        ):
-
-                            selected_square = (
-                                clicked_square
-                            )
-
+                        if piece is not None and piece.color == player_color:
+                            selected_square = clicked_square
                         else:
-
                             selected_square = None
 
+        # ------------------------------------------------------
+        # Draw
+        # ------------------------------------------------------
 
-        screen.fill(BACKGROUND)
+        if background_image is not None:
+            screen.blit(background_image, (0, 0))
+        else:
+            screen.fill(BACKGROUND)
+
+        board_shadow = pygame.Rect(BOARD_X - 6, BOARD_Y - 6, BOARD_SIZE + 12, BOARD_SIZE + 12)
+        shadow_surface = pygame.Surface(board_shadow.size, pygame.SRCALPHA)
+        pygame.draw.rect(shadow_surface, (0, 0, 0, 120), shadow_surface.get_rect(), border_radius=10)
+        screen.blit(shadow_surface, board_shadow.topleft)
+
         screen.blit(board_image, (BOARD_X, BOARD_Y))
-        draw_board(screen,board,selected_square)
-        draw_legal_moves(
-            screen,
-            board,
-            selected_square
-        )
+        draw_board(screen, board, selected_square)
+        draw_legal_moves(screen, board, selected_square)
 
         draw_side_panel(
             screen,
             board,
             engine_source,
-            selected_square
+            selected_square,
+            mood_images[current_mood],
+            displayed_speech,
         )
 
-        # ----------------------------------------------------
-        # Game over text
-        # ----------------------------------------------------
-
         if board.is_game_over():
-
-            font = pygame.font.SysFont(
-                "Arial",
-                28
-            )
-
-            text = font.render(
-                f"Game Over: {board.result()}",
-                True,
-                (255, 200, 80)
-            )
-
-            screen.blit(
-                text,
-                (
-                    SIDE_PANEL_X,
-                    WINDOW_HEIGHT - 100
-                )
-            )
+            font = pygame.font.SysFont("Arial", 30, bold=True)
+            text = font.render(f"Game Over: {board.result()}", True, (255, 200, 80))
+            screen.blit(text, (SIDE_PANEL_X, WINDOW_HEIGHT - 60))
 
         pygame.display.flip()
 
-        clock.tick(60)
-
-    # ========================================================
-    # CLEANUP
-    # ========================================================
-
     if engine is not None:
-
         engine.quit()
 
     pygame.quit()
 
 
-# ============================================================
-# RUN
-# ============================================================
-
 if __name__ == "__main__":
-
     main()
