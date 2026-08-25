@@ -191,3 +191,27 @@ Mean Reciprocal Rank: 0.6098
 ##############################################################
 last version 10 :
 just like the previous but now training on the traning and val sets and stopping at the 8 epoch no changes 
+#############################################################
+flipping the training data horizontally :
+#############################################################
+version 11:
+dropout 15 %
+  Top- 1:  4033/10055 (40.11%)
+Average P(actual move) when candidate exists: 0.3062
+Median P(actual move): 0.2056
+Mean Reciprocal Rank: 0.6101
+#############################################################
+version 12:
+dropout 0%
+
+  Top- 1:  4065/10055 (40.43%)
+Average P(actual move) when candidate exists: 0.3105
+Median P(actual move): 0.2106
+Mean Reciprocal Rank: 0.6136
+
+after a couple more epochs : 
+
+  Top- 1:  4077/10055 (40.55%)
+Average P(actual move) when candidate exists: 0.3112
+Median P(actual move): 0.2128
+Mean Reciprocal Rank: 0.6137
