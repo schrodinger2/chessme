@@ -14,7 +14,7 @@ from openingBook import OpeningBook
 # PATHS
 # ============================================================
 
-MODEL_PATH = ".\\models\\chess_policy_net_weights8.pth"
+MODEL_PATH = ".\\models\\chess_policy_net_weights11.pth"
 OPENING_BOOK_PATH = "custom_opening_book.pkl"
 
 STOCKFISH_PATH = "./stockfish\\stockfish\\stockfish-windows-x86-64-avx2.exe"
@@ -64,6 +64,10 @@ PIECE_NAMES = {
     "p": "bP", "n": "bN", "b": "bB", "r": "bR", "q": "bQ", "k": "bK",
 }
 
+candidate_info = []
+
+arrow_start = None
+arrow_end = None
 
 # ============================================================
 # MODEL / OPENING BOOK / ENGINE SETUP
@@ -170,6 +174,8 @@ def predict_next_move(board, stockfish_depth=8, num_candidate_moves=13):
         with torch.no_grad():
             scores = model(board_tensor, moves_tensor)
             probabilities = torch.softmax(scores, dim=1)
+            global candidate_info
+            candidate_info = [(board.san(move), probabilities[0, i].item()) for i, move in enumerate(stockfish_candidate_moves)]
             best_move_index = torch.argmax(probabilities, dim=1).item()
 
         if best_move_index >= len(stockfish_candidate_moves):
@@ -267,6 +273,46 @@ def trashtalker(eval, last_eval=0, opening=False, move=30):
 
     return talk[random.randint(0, len(talk) - 1)]
 
+
+
+def draw_arrow(screen, start_square, end_square):
+    if start_square is None or end_square is None:
+        return
+    start_file = chess.square_file(start_square)
+    start_rank = chess.square_rank(start_square)
+    end_file = chess.square_file(end_square)
+    end_rank = chess.square_rank(end_square)
+
+    start = (
+        BOARD_X + start_file * SQUARE_SIZE + SQUARE_SIZE // 2,
+        BOARD_Y + (7 - start_rank) * SQUARE_SIZE + SQUARE_SIZE // 2
+    )
+
+    end = (
+        BOARD_X + end_file * SQUARE_SIZE + SQUARE_SIZE // 2,
+        BOARD_Y + (7 - end_rank) * SQUARE_SIZE + SQUARE_SIZE // 2
+    )
+
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length = max((dx ** 2 + dy ** 2) ** 0.5, 1)
+
+    ux = dx / length
+    uy = dy / length
+
+    end_x = end[0] - ux * 10
+    end_y = end[1] - uy * 10
+
+    pygame.draw.line(screen, (220, 60, 60), start, (end_x, end_y), 10)
+
+    perp_x = -uy
+    perp_y = ux
+
+    tip = (end[0], end[1])
+    left = (end_x - ux * 22 + perp_x * 14, end_y - uy * 22 + perp_y * 14)
+    right = (end_x - ux * 22 - perp_x * 14, end_y - uy * 22 - perp_y * 14)
+
+    pygame.draw.polygon(screen, (220, 60, 60), [tip, left, right])
 
 # ============================================================
 # CHOOSE ENGINE MOVE
@@ -495,6 +541,10 @@ def draw_side_panel(
 
     if selected_square is not None:
         info_lines.append((f"Selected: {chess.square_name(selected_square)}", small_font, MUTED_TEXT_COLOR))
+    if candidate_info:
+        info_lines.append(("Candidates:", font, TEXT_COLOR))
+        for move, probability in candidate_info[:5]:
+            info_lines.append((f"{move}: {probability:.1%}", small_font, MUTED_TEXT_COLOR))
 
     line_gap = 12
     info_height = sum(f.get_height() for _, f, _ in info_lines) + line_gap * (len(info_lines) - 1) + 24
@@ -628,6 +678,8 @@ def main():
 
     board = chess.Board()
     selected_square = None
+    arrow_start = None
+    arrow_end = None
     engine_source = "Waiting"
     running = True
 
@@ -659,8 +711,16 @@ def main():
                 # reliable way out.
                 if event.key == pygame.K_ESCAPE:
                     running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                arrow_start = mouse_to_square(*event.pos)
+                arrow_end = arrow_start
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.MOUSEMOTION and arrow_start is not None:
+                arrow_end = mouse_to_square(*event.pos)
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                arrow_start = None
+                arrow_end = None
                 if board.is_game_over():
                     continue
 
@@ -760,7 +820,7 @@ def main():
         screen.blit(board_image, (BOARD_X, BOARD_Y))
         draw_board(screen, board, selected_square)
         draw_legal_moves(screen, board, selected_square)
-
+        draw_arrow(screen, arrow_start, arrow_end)
         draw_side_panel(
             screen,
             board,
