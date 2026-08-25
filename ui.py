@@ -197,11 +197,6 @@ def predict_next_move(board, stockfish_depth=8, num_candidate_moves=13):
         print(e)
         return None
 
-
-# ============================================================
-# TRASH TALK
-# ============================================================
-
 def trashtalker(eval, last_eval=0, opening=False, move=30):
     diff = last_eval - eval  # because computer playing black
 
@@ -303,7 +298,7 @@ def choose_move(board):
     if book_move is not None:
         print()
         print("Opening book:", board.san(book_move))
-        text = trashtalker(0, 0, True, len(board.move_stack))
+        text = trashtalker(0, 0, True, len(board.move_stack)/2)
         return book_move, "Opening Book", text, "neutral"
 
     print()
@@ -321,7 +316,7 @@ def choose_move(board):
     if eval_score is None:
         eval_score = last_eval
 
-    text = trashtalker(eval_score, last_eval, False, len(board.move_stack))
+    text = trashtalker(eval_score, last_eval, False, len(board.move_stack)/2)
 
     mood = "mad" if eval_score < 0 else "neutral"
 
@@ -648,7 +643,7 @@ def main():
     current_mood = "neutral"
 
     # 3) Speech bubble only updates every random(4, 7) AI moves.
-    displayed_speech = "Let's play."
+    displayed_speech = "may the better saif win"
     moves_since_last_speech = 0
     speech_threshold = random.randint(4, 7)
 
