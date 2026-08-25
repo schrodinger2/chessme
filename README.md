@@ -80,7 +80,7 @@ Several aspects of the problem required special handling:
 
 More details and experiments are documented separately.
 
-> 📄 **[Technical Report](tech report.txt)**
+> 📄 **[Technical Report](tech report.pdf)**
 
 ---
 ├── openingBook.py      # Opening book implementation
